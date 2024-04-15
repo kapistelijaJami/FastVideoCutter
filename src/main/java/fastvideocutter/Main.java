@@ -2,6 +2,8 @@ package fastvideocutter;
 
 import java.time.Duration;
 import java.util.Scanner;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import processes.Execute;
 import timer.DurationFormat;
 
@@ -14,7 +16,7 @@ public class Main {
 			printHelp();
 			
 			Scanner scan = new Scanner(System.in);
-			System.out.print("Input file (drag and drop works): ");
+			System.out.print("Input file (drag and drop works, URLs work): ");
 			args = new String[4];
 			args[0] = scan.nextLine();
 			args[0] = args[0].replaceAll("\"", "");
@@ -29,7 +31,7 @@ public class Main {
 			System.out.print("End time: ");
 			args[2] = scan.nextLine();
 			
-			System.out.print("New name (default is \"out\"): ");
+			System.out.print("New name (default is \"out\", for absolute path put drive letter and slash first, and end that one with file ext): ");
 			args[3] = scan.nextLine();
 			
 		} else if (args.length < 2 || args[0].equals("-h")) {
@@ -77,7 +79,12 @@ public class Main {
 			dot = "";
 		}
 		
-		String command = dot + "ffmpeg" + startString + " -i \"" + input + "\"" + endString + " -c copy \"" + outPath + outName + "." + type + "\"";
+		String command;
+		if (isWindowsAbsolutePath(outName)) {
+			command = dot + "ffmpeg" + startString + " -i \"" + input + "\"" + endString + " -c copy \"" + outName + "\"";
+		} else {
+			command = dot + "ffmpeg" + startString + " -i \"" + input + "\"" + endString + " -c copy \"" + outPath + outName + "." + type + "\"";
+		}
 		
 		Execute.executeCommand(command, true);
 		
@@ -101,4 +108,15 @@ public class Main {
 		System.out.println("':' separates hours, minutes and seconds. '.' separates seconds from milliseconds.");
 		System.out.println("Doesn't override a file, so make sure the outputName doesn't already exist in the directory.\n");
 	}
+	
+	private static boolean isWindowsAbsolutePath(String path) {
+        //Regular expression to match Windows absolute path
+        Pattern pattern = Pattern.compile("^[a-zA-Z]:\\\\.+$");
+        Pattern pattern2 = Pattern.compile("^[a-zA-Z]:/.+$");
+		
+		Matcher matcher = pattern.matcher(path);
+        Matcher matcher2 = pattern2.matcher(path);
+		
+        return matcher.matches() || matcher2.matches();
+    }
 }
