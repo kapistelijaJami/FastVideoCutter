@@ -1,9 +1,11 @@
 package fastvideocutter;
 
+import java.io.File;
 import java.time.Duration;
 import java.util.Scanner;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import javax.swing.filechooser.FileSystemView;
 import processes.Execute;
 import timer.DurationFormat;
 
@@ -31,8 +33,18 @@ public class Main {
 			System.out.print("End time: ");
 			args[2] = scan.nextLine();
 			
-			System.out.print("New name (default is \"out\", for absolute path put drive letter and slash first, and end that one with file ext): ");
+			System.out.println("New name (default is \"out\"): ");
+			System.out.println("(For absolute path put drive letter and slash first, and end it with file ext)");
+			if (isURL(args[0])) {
+				System.out.println("(One empty enter adds downloads folder automatically as a path)");
+			}
 			args[3] = scan.nextLine();
+			
+			if (args[3].isEmpty() && isURL(args[0])) {
+				args[3] = getDownloadsFolder().getAbsolutePath() + "\\";
+				System.out.print(args[3]);
+				args[3] += scan.nextLine();
+			}
 			
 		} else if (args.length < 2 || args[0].equals("-h")) {
 			printHelp();
@@ -101,7 +113,8 @@ public class Main {
 		
 		System.out.println("Like this: FastVideoCutter.exe \"D:\\Videot\\OBS\\Recordings\\Alchemy glithcless.mp4\" 30:00 35:00\n");
 		
-		System.out.println("Start time is required (can be 0), end time is not. OutputName is also optional (defaults to \"out\").");
+		System.out.println("Start time and end time are in seconds (neither is required). OutputName is also optional (defaults to \"out\").");
+		System.out.println("For absolute path put drive letter and slash first, and end it with file ext.");
 		System.out.println("End time can be duration too if you put d (for duration) right before the time.");
 		System.out.println("Like so: d5:00 (means 5 minutes of video).");
 		System.out.println("Time format always includes seconds. You can add others intuitively.");
@@ -118,5 +131,26 @@ public class Main {
         Matcher matcher2 = pattern2.matcher(path);
 		
         return matcher.matches() || matcher2.matches();
+    }
+	
+	private static boolean isURL(String url) {
+        Pattern pattern = Pattern.compile("^https?:.*$", Pattern.CASE_INSENSITIVE);
+		Matcher matcher = pattern.matcher(url);
+        return matcher.matches();
+    }
+	
+	private static File getDefaultDirectory() {
+        FileSystemView fileSystemView = FileSystemView.getFileSystemView();
+        return fileSystemView.getDefaultDirectory();
+    }
+	
+	private static File getDownloadsFolder() {
+		String userHome = System.getProperty("user.home");
+        File downloads = new File(userHome, "Downloads");
+		if (downloads.exists() && downloads.isDirectory()) {
+            return downloads;
+        } else {
+            return getDefaultDirectory();
+        }
     }
 }
