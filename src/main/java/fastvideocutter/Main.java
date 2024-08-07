@@ -1,15 +1,23 @@
 package fastvideocutter;
 
 import java.io.File;
+import java.io.IOException;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Scanner;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import javax.swing.filechooser.FileSystemView;
 import processes.Execute;
+import processes.StreamGobbler;
+import processes.StreamGobbler.Type;
 import timer.DurationFormat;
 
 public class Main {
+	private static Process PROCESS = null;
+	
 	public static void main(String[] args) {
 		boolean startedWithoutArgs = false;
 		if (args.length == 0) {
@@ -18,10 +26,15 @@ public class Main {
 			printHelp();
 			
 			Scanner scan = new Scanner(System.in);
-			System.out.print("Input file (drag and drop works, URLs work): ");
+			System.out.print("Input file (drag and drop works, URLs work. 'm' for merge mode): ");
 			args = new String[4];
 			args[0] = scan.nextLine();
 			args[0] = args[0].replaceAll("\"", "");
+			
+			if (args[0].toLowerCase().equals("m") || args[0].toLowerCase().equals("merge")) {
+				merge();
+				return;
+			}
 			
 			System.out.print("Start time: ");
 			args[1] = scan.nextLine();
@@ -41,6 +54,7 @@ public class Main {
 			args[3] = scan.nextLine();
 			
 			if (args[3].isEmpty() && isURL(args[0])) {
+				System.out.println("Output filename (include extension):");
 				args[3] = getDownloadsFolder().getAbsolutePath() + "\\";
 				System.out.print(args[3]);
 				args[3] += scan.nextLine();
@@ -84,26 +98,30 @@ public class Main {
 		
 		if (args.length == 4 && !args[3].isBlank()) {
 			outName = args[3];
+			if (outName.endsWith(".mp4") || outName.endsWith(".mkv")) {
+				type = outName.substring(outName.lastIndexOf(".") + 1);
+				outName = outName.substring(0, outName.lastIndexOf("."));
+			}
 		}
 		
-		String dot = ".\\";
+		String startDot = ".\\";
 		if (Execute.programExists("ffmpeg")) {
-			dot = "";
+			startDot = "";
 		}
 		
 		String command;
 		if (isWindowsAbsolutePath(outName)) {
-			command = dot + "ffmpeg" + startString + " -i \"" + input + "\"" + endString + " -c copy \"" + outName + "\"";
+			command = startDot + "ffmpeg -protocol_whitelist file,http,https,tcp,tls" + startString + " -i \"" + input + "\"" + endString + " -c copy -map 0:v -map 0:a \"" + outName + "\"";
 		} else {
-			command = dot + "ffmpeg" + startString + " -i \"" + input + "\"" + endString + " -c copy \"" + outPath + outName + "." + type + "\"";
+			command = startDot + "ffmpeg -protocol_whitelist file,http,https,tcp,tls" + startString + " -i \"" + input + "\"" + endString + " -c copy -map 0:v -map 0:a \"" + outPath + outName + "." + type + "\"";
 		}
 		
-		Execute.executeCommand(command, true);
+		executeCommand(command);
 		
 		if (startedWithoutArgs) {
 			System.out.println("\nDone.");
 			System.out.println("Press enter to exit.");
-			new Scanner(System.in).nextLine(); //keeps the console open until user presses enter.
+			new Scanner(System.in).nextLine(); //Keeps the console open until user presses enter.
 		}
 	}
 	
@@ -153,4 +171,89 @@ public class Main {
             return getDefaultDirectory();
         }
     }
+
+	private static void merge() {
+		System.out.println("\nMODE SET TO MERGE. ENTER AT LEAST 2 FILES:\n");
+		
+		Scanner scan = new Scanner(System.in);
+		List<String> files = new ArrayList<>();
+		
+		while (true) {
+			System.out.print("Input file (drag and drop works, URLs work. Video codecs must be same. Empty input stops.): ");
+			String line = scan.nextLine();
+			if (line.isBlank()) {
+				break;
+			}
+			line = line.replaceAll("\"", "");
+			files.add(line);
+		}
+		
+		if (files.size() <= 1) {
+			System.out.println("At least 2 files needed!");
+			System.out.println("Press enter to exit.");
+			scan.nextLine();
+			return;
+		}
+		
+		System.out.println("Output filename (include extension):");
+		String output = getDownloadsFolder().getAbsolutePath() + "\\";
+		System.out.print(output);
+		output += scan.nextLine();
+		
+		String dot = ".\\";
+		if (Execute.programExists("ffmpeg")) {
+			dot = "";
+		}
+		
+		String command;
+		if (isWindowsAbsolutePath(output)) {
+			String filesString = "";
+			
+			for (int i = 0; i < files.size(); i++) {
+				String file = files.get(i);
+				if (i != 0) {
+					filesString += " & ";
+				}
+				filesString += "echo file '" + file + "'";
+			}
+			
+			command = "(" + filesString + ") | " + dot + "ffmpeg -protocol_whitelist file,pipe,http,https,tcp,tls -f concat -safe 0 -i pipe:0 -c copy \"" + output + "\"";
+		} else {
+			System.out.println("Error! File path is not absolute, even though it should be.");
+			return;
+		}
+		
+		executeCommand(command);
+		
+		System.out.println("\nDone.");
+		System.out.println("Press enter to exit.");
+		scan.nextLine(); //Keeps the console open until user presses enter.
+	}
+	
+	private static void executeCommand(String command) {
+		PROCESS = Execute.executeCommandGetProcess(command);
+		Execute.gobbleStream(PROCESS, true, Type.OUTPUT);
+		Execute.gobbleStream(PROCESS, true, Type.ERROR);
+		
+		System.out.println("Command \'" + command + "\' executed");
+		
+		Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+			if (PROCESS != null && PROCESS.isAlive()) {
+				System.out.println("Shutdown hook triggered. Terminating ffmpeg process.");
+				Execute.cancelProcess(PROCESS);
+				System.out.println("\nProcess terminated.");
+			}
+		}));
+		
+		System.out.println("Waiting for command to end.");
+		
+		try {
+			PROCESS.waitFor();
+			if (PROCESS.isAlive()) {
+				Execute.cancelProcess(PROCESS);
+			}
+		} catch (InterruptedException e) {
+			e.printStackTrace(System.err);
+		}
+	}
 }
