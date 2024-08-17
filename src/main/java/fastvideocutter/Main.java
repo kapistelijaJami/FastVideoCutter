@@ -91,6 +91,13 @@ public class Main {
 		String input = args[0];
 		String type = input.substring(input.lastIndexOf(".") + 1);
 		
+		//If file is m3u8, it might be master file with many qualities, we don't want to download all of them.
+		//FFmpeg will choose the highest quality by default.
+		String mapStreams = "-map 0:v -map 0:a ";
+		if (type.equals("m3u8")) {
+			mapStreams = "";
+		}
+		
 		int idx = Math.max(input.lastIndexOf("\\"), input.lastIndexOf("/"));
 		if (idx >= 0) {
 			outPath = input.substring(0, idx + 1);
@@ -110,10 +117,10 @@ public class Main {
 		}
 		
 		String command;
-		if (isWindowsAbsolutePath(outName)) {
-			command = startDot + "ffmpeg -protocol_whitelist file,http,https,tcp,tls" + startString + " -i \"" + input + "\"" + endString + " -c copy -map 0:v -map 0:a \"" + outName + "\"";
+		if (isWindowsAbsolutePath(outName)) { //Doesn't include the extension
+			command = startDot + "ffmpeg -protocol_whitelist file,http,https,tcp,tls" + startString + " -i \"" + input + "\"" + endString + " -c copy " + mapStreams + "\"" + outName + "." + type + "\"";
 		} else {
-			command = startDot + "ffmpeg -protocol_whitelist file,http,https,tcp,tls" + startString + " -i \"" + input + "\"" + endString + " -c copy -map 0:v -map 0:a \"" + outPath + outName + "." + type + "\"";
+			command = startDot + "ffmpeg -protocol_whitelist file,http,https,tcp,tls" + startString + " -i \"" + input + "\"" + endString + " -c copy " + mapStreams + "\"" + outPath + outName + "." + type + "\"";
 		}
 		
 		executeCommand(command);
