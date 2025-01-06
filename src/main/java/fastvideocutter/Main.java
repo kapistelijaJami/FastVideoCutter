@@ -41,7 +41,11 @@ public class Main {
 				printFullHelp();
 				waitForEnter();
 				return;
-			} else if (arg.toLowerCase().equals("m") || arg.toLowerCase().equals("merge")) {
+			} else if (arg.toLowerCase().equals("formats")) {
+				printSupportedFileFormats();
+				waitForEnter();
+				return;
+			}  else if (arg.toLowerCase().equals("m") || arg.toLowerCase().equals("merge")) {
 				merge();
 				return;
 			} else if (arg.toLowerCase().equals("a") || arg.toLowerCase().equals("accurate")) {
@@ -80,6 +84,9 @@ public class Main {
 		} else if (args.length < 2 || args[0].equals("-h")) {
 			printFullHelp();
 			return;
+		} else if (args.length < 2 || args[0].equals("-formats")) {
+			printSupportedFileFormats();
+			return;
 		} else {
 			arguments = Arguments.parseArguments(args);
 		}
@@ -97,10 +104,10 @@ public class Main {
 		if (!arguments.endTime.isBlank()) {
 			if (arguments.endTime.startsWith("d")) {
 				Duration e = DurationFormat.parseSimple(arguments.endTime.substring(1));
-				endString = " -t " + (e.toMillis() / 1000.0);
+				endString = "-t " + (e.toMillis() / 1000.0) + " ";
 			} else {
 				Duration e = DurationFormat.parseSimple(arguments.endTime);
-				endString = " -t " + (e.minus(start).toMillis() / 1000.0);
+				endString = "-t " + (e.minus(start).toMillis() / 1000.0) + " ";
 			}
 		}
 		
@@ -108,25 +115,44 @@ public class Main {
 		String outName = "out";
 		
 		String input = arguments.inputFile;
-		String type = input.substring(input.lastIndexOf(".") + 1);
-		
-		//If file is m3u8, it might be master file with many qualities, we don't want to download all of them.
-		//FFmpeg will choose the highest quality by default.
-		String mapStreams = "-map 0:v -map 0:a "; //This picks all streams
-		if (type.equals("m3u8")) {
-			mapStreams = "";
-		}
+		String inputType = input.substring(input.lastIndexOf(".") + 1);
 		
 		int idx = Math.max(input.lastIndexOf("\\"), input.lastIndexOf("/"));
 		if (idx >= 0) {
 			outPath = input.substring(0, idx + 1);
 		}
 		
+		AcceptedType acceptedType = null;
 		if (!arguments.outputFilename.isBlank()) {
 			outName = arguments.outputFilename;
-			if (outName.endsWith(".mp4") || outName.endsWith(".mkv")) {
-				type = outName.substring(outName.lastIndexOf(".") + 1);
+			
+			acceptedType = AcceptedType.endsWithAcceptedType(outName);
+			if (acceptedType != null) {
 				outName = outName.substring(0, outName.lastIndexOf("."));
+			}
+		}
+		
+		if (acceptedType == null) {
+			acceptedType = AcceptedType.endsWithAcceptedType(inputType);
+			if (acceptedType == null) {
+				System.out.println("Enter correct output type.");
+				if (askForExitWhenDone) {
+					waitForEnter();
+				}
+				return;
+			}
+		}
+		
+		String mapStreams = "-map 0:v -map 0:a "; //This picks all video and audio streams
+		if (inputType.equals("m3u8")) {
+			//If file is m3u8, it might be a master file with many qualities, we don't want to download all of them.
+			//FFmpeg will choose the highest quality by default.
+			mapStreams = "";
+		} else if (acceptedType.isAudio()) { //Accepted video types support multiple video and audio streams, but audio mostly doesn't.
+			if (acceptedType.supportsMultipleStreams()) {
+				mapStreams = "-map 0:a ";
+			} else {
+				mapStreams = "-map 0:a:0 ";
 			}
 		}
 		
@@ -135,16 +161,27 @@ public class Main {
 			startDot = "";
 		}
 		
-		String codec = " -c copy ";
-		if (arguments.accurateMode) {
-			codec = " -c:v libx264 -crf 18 -c:a aac ";
+		String codec;
+		
+		if (acceptedType.isVideo()) { //Accepted video types can use copy always unless we want accurate mode
+			if (arguments.accurateMode) {
+				codec = "-c:v libx264 -crf 18 -c:a aac ";
+			} else {
+				codec = "-c:v copy -c:a copy ";
+			}
+		} else {
+			if (acceptedType.supportsCopy() && !arguments.accurateMode) {
+				codec = "-c:a copy ";
+			} else {
+				codec = ""; //Let ffmpeg decide the default codec unless it supports copy.
+			}
 		}
 		
 		String command;
 		if (isWindowsAbsolutePath(outName)) { //Doesn't include the extension
-			command = startDot + "ffmpeg -protocol_whitelist file,http,https,tcp,tls" + startString + " -i \"" + input + "\"" + endString + codec + mapStreams + "\"" + outName + "." + type + "\"";
+			command = startDot + "ffmpeg -protocol_whitelist file,http,https,tcp,tls" + startString + " -i \"" + input + "\" " + endString + codec + mapStreams + "\"" + outName + "." + acceptedType.toString() + "\"";
 		} else {
-			command = startDot + "ffmpeg -protocol_whitelist file,http,https,tcp,tls" + startString + " -i \"" + input + "\"" + endString + codec + mapStreams + "\"" + outPath + outName + "." + type + "\"";
+			command = startDot + "ffmpeg -protocol_whitelist file,http,https,tcp,tls" + startString + " -i \"" + input + "\" " + endString + codec + mapStreams + "\"" + outPath + outName + "." + acceptedType.toString() + "\"";
 		}
 		
 		executeCommand(command);
@@ -183,15 +220,27 @@ public class Main {
 		System.out.println("You can change format by giving type extension at the end of the outputName.\n");
 		
 		System.out.println("Flags:");
-		System.out.println("-i or --input\t\tInput file location.");
-		System.out.println("-s or --start\t\tStart time.");
-		System.out.println("-e or --end\t\tEnd time.");
-		System.out.println("-d or --duration\tDuration (Use either this or End time).");
-		System.out.println("-o or --output\t\tOutput file name.");
-		System.out.println("-a or --accurate\tAccurate timings. Won't use I-frames, so is accurate but slow. Will re-encode the video.\n");
+		System.out.println("-i or -input\t\tInput file location.");
+		System.out.println("-s or -start\t\tStart time.");
+		System.out.println("-e or -end\t\tEnd time.");
+		System.out.println("-d or -duration\t\tDuration (Use either this or End time).");
+		System.out.println("-o or -output\t\tOutput file name.");
+		System.out.println("-a or -accurate\t\tAccurate timings. Won't use I-frames, so is accurate but slow. Will re-encode the video.");
+		System.out.println("-formats\t\tDisplays supported output file formats. (Or enter 'formats' as the first input when asked.)\n");
 		
 		System.out.println("Flag usage: FastVideoCutter.exe input.mp4 -s 15:35 -e 21:13 -o outputName.mp4");
 		System.out.println("If -o is last flag it can be omitted and have only outputName for convenience.\n");
+	}
+	
+	private static void printSupportedFileFormats() {
+		System.out.println("\nThis is a list of supported output file formats.");
+		System.out.println("Input file type can be something else, and it will usually work.");
+		System.out.println("If it doesn't work, try using accurate timings and one of the supported output file types.\n");
+		
+		for (AcceptedType type : AcceptedType.values()) {
+			System.out.println(type.toString() + "\t(" + type.getMediaType() + ")");
+		}
+		System.out.println();
 	}
 	
 	private static boolean isWindowsAbsolutePath(String path) {
@@ -244,8 +293,7 @@ public class Main {
 		
 		if (files.size() <= 1) {
 			System.out.println("At least 2 files needed!");
-			System.out.println("Press enter to exit.");
-			scan.nextLine();
+			waitForEnter();
 			return;
 		}
 		
@@ -273,15 +321,15 @@ public class Main {
 			
 			command = "(" + filesString + ") | " + dot + "ffmpeg -protocol_whitelist file,pipe,http,https,tcp,tls -f concat -safe 0 -i pipe:0 -c copy \"" + output + "\"";
 		} else {
-			System.out.println("Error! File path is not absolute, even though it should be.");
+			System.out.println("Error! File path is not absolute, even though it should be."); //Shouldn't come here ever.
+			waitForEnter();
 			return;
 		}
 		
 		executeCommand(command);
 		
 		System.out.println("\nDone.");
-		System.out.println("Press enter to exit.");
-		scan.nextLine(); //Keeps the console open until user presses enter.
+		waitForEnter();
 	}
 	
 	private static void executeCommand(String command) {

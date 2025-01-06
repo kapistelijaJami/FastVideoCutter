@@ -17,22 +17,22 @@ public class Arguments {
 			if (arg.startsWith("-")) {
 				encounteredAFlag = true;
 				
-				if (arg.equals("-i") || arg.equals("--input")) {
+				if (arg.equals("-i") || arg.equals("-input")) {
 					arg = args[++i];
 					arguments.inputFile = arg;
-				} else if (arg.equals("-s") || arg.equals("--start")) {
+				} else if (arg.equals("-s") || arg.equals("-start")) {
 					arg = args[++i];
 					arguments.startTime = arg;
-				} else if (arg.equals("-e") || arg.equals("--end")) {
+				} else if (arg.equals("-e") || arg.equals("-end")) {
 					arg = args[++i];
 					arguments.endTime = arg;
-				} else if (arg.equals("-d") || arg.equals("--duration")) {
+				} else if (arg.equals("-d") || arg.equals("-duration")) {
 					arg = args[++i];
 					arguments.endTime = "d" + arg;
-				} else if (arg.equals("-o") || arg.equals("--output")) {
+				} else if (arg.equals("-o") || arg.equals("-output")) {
 					arg = args[++i];
 					arguments.outputFilename = arg;
-				} else if (arg.equals("-a") || arg.equals("--accurate")) {
+				} else if (arg.equals("-a") || arg.equals("-accurate")) {
 					arguments.accurateMode = true;
 				}
 				
