@@ -18,7 +18,10 @@ import timer.DurationFormat;
 /*TODO: Might want to implement faster download for m3u8 files, like in TwitchRecover, see TwitchRecover.Core.Downloader.Download.TSDownload()
 It downloads them concurrently and then combines (literally just merges bytes back to back). But since this can set the times we wouldn't need to download all the .ts files.
 Not sure how to get the correct video length and start time then. Maybe if the downloaded length is long, download all and then combine and cut with ffmpeg,
-but otherwise let ffmpeg do it all the way. Or figure out a way to do it better.*/
+but otherwise let ffmpeg do it all the way. Or figure out a way to do it better.
+//TODO: Apparently you can add referer header to ffmpeg as well when downloading from the internet with -headers "Referer: https://example.com\r\n". Might want to add an option for that.
+//(and apparently the \r\n is required at the end of a header, so after each if many, no other separators) You could also add User-Agent etc.
+*/
 public class Main {
 	private static Process PROCESS = null;
 	
@@ -117,9 +120,13 @@ public class Main {
 		String input = arguments.inputFile;
 		String inputType = input.substring(input.lastIndexOf(".") + 1);
 		
-		int idx = Math.max(input.lastIndexOf("\\"), input.lastIndexOf("/"));
-		if (idx >= 0) {
-			outPath = input.substring(0, idx + 1);
+		if (isURL(input)) { //If input was url, then we can't use it as an output path. (And we wont use this either if user provided an absolute path)
+			outPath = getDownloadsFolder().getAbsolutePath() + "\\";
+		} else {
+			int idx = Math.max(input.lastIndexOf("\\"), input.lastIndexOf("/"));
+			if (idx >= 0) {
+				outPath = input.substring(0, idx + 1);
+			}
 		}
 		
 		AcceptedType acceptedType = null;
@@ -298,9 +305,7 @@ public class Main {
 		}
 		
 		System.out.println("Output filename (include extension):");
-		String output = getDownloadsFolder().getAbsolutePath() + "\\";
-		System.out.print(output);
-		output += scan.nextLine();
+		String outputName = scan.nextLine();
 		
 		String dot = ".\\";
 		if (Execute.programExists("ffmpeg")) {
@@ -308,7 +313,13 @@ public class Main {
 		}
 		
 		String command;
-		if (isWindowsAbsolutePath(output)) {
+		boolean addedDownloadsFolder = false;
+		if (!isWindowsAbsolutePath(outputName)) {
+			outputName = getDownloadsFolder().getAbsolutePath() + "\\" + outputName;
+			addedDownloadsFolder = true;
+		}
+		
+		if (isWindowsAbsolutePath(outputName)) {
 			String filesString = "";
 			
 			for (int i = 0; i < files.size(); i++) {
@@ -319,7 +330,7 @@ public class Main {
 				filesString += "echo file '" + file + "'";
 			}
 			
-			command = "(" + filesString + ") | " + dot + "ffmpeg -protocol_whitelist file,pipe,http,https,tcp,tls -f concat -safe 0 -i pipe:0 -c copy \"" + output + "\"";
+			command = "(" + filesString + ") | " + dot + "ffmpeg -protocol_whitelist file,pipe,http,https,tcp,tls -f concat -safe 0 -i pipe:0 -c copy \"" + outputName + "\"";
 		} else {
 			System.out.println("Error! File path is not absolute, even though it should be."); //Shouldn't come here ever.
 			waitForEnter();
@@ -329,6 +340,9 @@ public class Main {
 		executeCommand(command);
 		
 		System.out.println("\nDone.");
+		if (addedDownloadsFolder) {
+			System.out.println("Downloaded to " + getDownloadsFolder().getAbsolutePath() + "\\");
+		}
 		waitForEnter();
 	}
 	
