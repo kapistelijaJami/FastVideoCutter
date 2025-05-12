@@ -36,9 +36,7 @@ public class Main {
 			
 			printShortHelp();
 			
-			Scanner scan = new Scanner(System.in);
-			System.out.print("Input file (drag and drop works, URLs work. 'm' for merge mode, 'a' for accurate timings (slow)): ");
-			String arg = scan.nextLine();
+			String arg = askForInput("Input file (drag and drop works, URLs work. 'm' for merge mode, 'a' for accurate timings (slow)): ");
 			
 			if (arg.toLowerCase().equals("h") || arg.toLowerCase().equals("help")) {
 				printFullHelp();
@@ -53,35 +51,32 @@ public class Main {
 				return;
 			} else if (arg.toLowerCase().equals("a") || arg.toLowerCase().equals("accurate")) {
 				arguments.accurateMode = true;
-				System.out.print("Input file (drag and drop works, URLs work): ");
-				arguments.inputFile = scan.nextLine();
+				arguments.inputFile = askForInput("Input file (drag and drop works, URLs work): ");
 				arguments.inputFile = arguments.inputFile.replaceAll("\"", "");
 			} else {
 				arguments.inputFile = arg.replaceAll("\"", "");
 			}
 			
-			System.out.print("Start time: ");
-			arguments.startTime = scan.nextLine();
+			arguments.startTime = askForInput("Start time: ", true);
 			
 			if (arguments.startTime.isBlank()) {
 				arguments.startTime = "0";
 			}
 			
-			System.out.print("End time: ");
-			arguments.endTime = scan.nextLine();
+			arguments.endTime = askForInput("End time: ", true);
 			
 			System.out.println("New name (default is \"out\"): ");
 			System.out.println("(For absolute path put drive letter and slash first, and end it with file ext)");
 			if (isURL(arguments.inputFile)) {
 				System.out.println("(One empty enter adds downloads folder automatically as a path)");
 			}
-			arguments.outputFilename = scan.nextLine();
+			arguments.outputFilename = askForInput(true);
 			
 			if (arguments.outputFilename.isEmpty() && isURL(arguments.inputFile)) {
 				System.out.println("Output filename (include extension):");
 				arguments.outputFilename = getDownloadsFolder().getAbsolutePath() + "\\";
 				System.out.print(arguments.outputFilename);
-				arguments.outputFilename += scan.nextLine();
+				arguments.outputFilename += askForInput();
 			}
 			
 		} else if (args.length < 2 || args[0].equals("-h")) {
@@ -199,6 +194,38 @@ public class Main {
 		}
 	}
 	
+	private static String askForInput() {
+		return askForInput("", false);
+	}
+	
+	private static String askForInput(boolean allowEmpty) {
+		return askForInput("", allowEmpty);
+	}
+	
+	private static String askForInput(String print) {
+		return askForInput(print, false);
+	}
+	
+	private static String askForInput(String print, boolean allowEmpty) {
+		Scanner scan = new Scanner(System.in);
+		while (true) {
+			if (!print.isEmpty()) {
+				System.out.print(print);
+			}
+			String input = scan.nextLine();
+			
+			if (allowEmpty) {
+				return input;
+			}
+			
+			if (input.isBlank()) {
+				System.out.println("Input cannot be empty!");
+				continue;
+			}
+			return input;
+		}
+	}
+	
 	private static void waitForEnter() {
 		System.out.println("Press enter to exit.");
 		new Scanner(System.in).nextLine(); //Keeps the console open until user presses enter.
@@ -289,8 +316,7 @@ public class Main {
 		List<String> files = new ArrayList<>();
 		
 		while (true) {
-			System.out.print("Input file (drag and drop works, URLs work. Video codecs must be same. Empty input stops.): ");
-			String line = scan.nextLine();
+			String line = askForInput("Input file (drag and drop works, URLs work. Video codecs must be same. Empty input stops.): ", true);
 			if (line.isBlank()) {
 				break;
 			}
@@ -304,8 +330,7 @@ public class Main {
 			return;
 		}
 		
-		System.out.println("Output filename (include extension):");
-		String outputName = scan.nextLine();
+		String outputName = askForInput("Output filename (include extension): ");
 		
 		String dot = ".\\";
 		if (Execute.programExists("ffmpeg")) {
@@ -332,7 +357,7 @@ public class Main {
 			
 			command = "(" + filesString + ") | " + dot + "ffmpeg -protocol_whitelist file,pipe,http,https,tcp,tls -f concat -safe 0 -i pipe:0 -c copy \"" + outputName + "\"";
 		} else {
-			System.out.println("Error! File path is not absolute, even though it should be."); //Shouldn't come here ever.
+			System.err.println("Error! File path is not absolute, even though it should be."); //Shouldn't come here ever.
 			waitForEnter();
 			return;
 		}
