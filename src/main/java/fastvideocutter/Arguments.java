@@ -2,10 +2,12 @@ package fastvideocutter;
 
 public class Arguments {
 	public boolean accurateMode = false;
+	public boolean hasReferrer = false;
 	public String inputFile;
 	public String outputFilename;
 	public String startTime;
 	public String endTime;
+	public String referrer;
 	
 	public static Arguments parseArguments(String[] args) {
 		Arguments arguments = new Arguments();
@@ -34,6 +36,9 @@ public class Arguments {
 					arguments.outputFilename = arg;
 				} else if (arg.equals("-a") || arg.equals("-accurate")) {
 					arguments.accurateMode = true;
+				} else if (arg.equals("-r") || arg.equals("-referrer") || arg.equals("-referer")) {
+					arguments.hasReferrer = true;
+					arguments.referrer = args[++i];
 				}
 				
 			} else if (!encounteredAFlag) {

@@ -5,7 +5,7 @@ public enum AcceptedType {
 	
 	private final String mediaType;
 	private final boolean supportsMultipleStreams;
-	private final boolean supportsCopy; //If supports copy codec always, otherwise let ffmpeg decide how to encode it (it should usually default to copy if possible).
+	private final boolean supportsCopy; //True if supports copy codec always, otherwise let ffmpeg decide how to encode it (it should usually default to copy if possible).
 	
 	private AcceptedType(String mediaType, boolean supportsMultipleStreams, boolean supportsCopy) {
 		this.mediaType = mediaType;

@@ -19,8 +19,7 @@ import timer.DurationFormat;
 It downloads them concurrently and then combines (literally just merges bytes back to back). But since this can set the times we wouldn't need to download all the .ts files.
 Not sure how to get the correct video length and start time then. Maybe if the downloaded length is long, download all and then combine and cut with ffmpeg,
 but otherwise let ffmpeg do it all the way. Or figure out a way to do it better.
-//TODO: Apparently you can add referer header to ffmpeg as well when downloading from the internet with -headers "Referer: https://example.com\r\n". Might want to add an option for that.
-//(and apparently the \r\n is required at the end of a header, so after each if many, no other separators) You could also add User-Agent etc.
+//TODO: You could also add option for User-Agent to headers.
 */
 public class Main {
 	private static Process PROCESS = null;
@@ -51,6 +50,11 @@ public class Main {
 				return;
 			} else if (arg.toLowerCase().equals("a") || arg.toLowerCase().equals("accurate")) {
 				arguments.accurateMode = true;
+				arguments.inputFile = askForInput("Input file (drag and drop works, URLs work): ");
+				arguments.inputFile = arguments.inputFile.replaceAll("\"", "");
+			} else if (arg.toLowerCase().equals("r") || arg.toLowerCase().equals("referrer") || arg.toLowerCase().equals("referer")) {
+				arguments.hasReferrer = true;
+				arguments.referrer = askForInput("Referrer url (just the domain name): ");
 				arguments.inputFile = askForInput("Input file (drag and drop works, URLs work): ");
 				arguments.inputFile = arguments.inputFile.replaceAll("\"", "");
 			} else {
@@ -179,11 +183,16 @@ public class Main {
 			}
 		}
 		
+		String referrer = "";
+		if (arguments.hasReferrer) {
+			referrer = " -headers \"Referer: " + arguments.referrer + "\"";	//\\r\\n wasn't recognized as crlf for some reason, so with them it didn't work. Ffmpeg added its own.
+		}
+		
 		String command;
 		if (isWindowsAbsolutePath(outName)) { //Doesn't include the extension
-			command = startDot + "ffmpeg -protocol_whitelist file,http,https,tcp,tls" + startString + " -i \"" + input + "\" " + endString + codec + mapStreams + "\"" + outName + "." + acceptedType.toString() + "\"";
+			command = startDot + "ffmpeg" + referrer + " -protocol_whitelist file,http,https,tcp,tls" + startString + " -i \"" + input + "\" " + endString + codec + mapStreams + "\"" + outName + "." + acceptedType.toString() + "\"";
 		} else {
-			command = startDot + "ffmpeg -protocol_whitelist file,http,https,tcp,tls" + startString + " -i \"" + input + "\" " + endString + codec + mapStreams + "\"" + outPath + outName + "." + acceptedType.toString() + "\"";
+			command = startDot + "ffmpeg" + referrer + " -protocol_whitelist file,http,https,tcp,tls" + startString + " -i \"" + input + "\" " + endString + codec + mapStreams + "\"" + outPath + outName + "." + acceptedType.toString() + "\"";
 		}
 		
 		executeCommand(command);
@@ -254,13 +263,14 @@ public class Main {
 		System.out.println("You can change format by giving type extension at the end of the outputName.\n");
 		
 		System.out.println("Flags:");
-		System.out.println("-i or -input\t\tInput file location.");
-		System.out.println("-s or -start\t\tStart time.");
-		System.out.println("-e or -end\t\tEnd time.");
-		System.out.println("-d or -duration\t\tDuration (Use either this or End time).");
-		System.out.println("-o or -output\t\tOutput file name.");
-		System.out.println("-a or -accurate\t\tAccurate timings. Won't use I-frames, so is accurate but slow. Will re-encode the video.");
-		System.out.println("-formats\t\tDisplays supported output file formats. (Or enter 'formats' as the first input when asked.)\n");
+		System.out.println("-i or -input\t\t\tInput file location.");
+		System.out.println("-s or -start\t\t\tStart time.");
+		System.out.println("-e or -end\t\t\tEnd time.");
+		System.out.println("-d or -duration\t\t\tDuration (Use either this or End time).");
+		System.out.println("-o or -output\t\t\tOutput file name.");
+		System.out.println("-a or -accurate\t\t\tAccurate timings. Won't use I-frames, so is accurate but slow. Will re-encode the video.");
+		System.out.println("-r or -referrer or -referer\tPass a referrer header.");
+		System.out.println("-formats\t\t\tDisplays supported output file formats. (Or enter 'formats' as the first input when asked.)\n");
 		
 		System.out.println("Flag usage: FastVideoCutter.exe input.mp4 -s 15:35 -e 21:13 -o outputName.mp4");
 		System.out.println("If -o is last flag it can be omitted and have only outputName for convenience.\n");
